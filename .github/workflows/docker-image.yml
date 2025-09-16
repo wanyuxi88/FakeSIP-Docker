@@ -11,38 +11,30 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # ------------------------------
       # 1. Checkout 仓库
-      # ------------------------------
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ------------------------------
       # 2. 设置 Docker Buildx
-      # ------------------------------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # ------------------------------
-      # 3. 构建 multi-arch 镜像并生成 tar
-      # ------------------------------
-      - name: Build multi-arch Docker image and save to tar
+      # 3. 构建 multi-arch Docker 镜像并输出为 OCI tar 文件
+      - name: Build multi-arch Docker image and save as OCI tar
         run: |
           IMAGE_NAME=fakesip
           TAG=$(date +%s)
           echo "Building multi-arch image: $IMAGE_NAME:$TAG"
 
-          # 使用 buildx 输出到 tar 文件，支持 multi-arch
+          # 使用 OCI 格式输出 tar，支持 multi-arch
           docker buildx build \
             --platform linux/amd64,linux/arm64 \
             --file Dockerfile \
             --tag $IMAGE_NAME:$TAG \
             --tag $IMAGE_NAME:latest \
-            --output type=docker,dest=fakesip-image.tar .
+            --output type=oci,dest=fakesip-image.tar .
 
-      # ------------------------------
       # 4. 上传 tar 包到 GitHub
-      # ------------------------------
       - name: Upload Docker image tar to GitHub
         uses: actions/upload-artifact@v4
         with:
