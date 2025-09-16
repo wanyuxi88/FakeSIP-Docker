@@ -1,62 +1,107 @@
-name: Build and Export Multi-Arch Docker Images
+# ------------------------------
+# Build arguments
+# ------------------------------
+ARG ARCH=x86_64
+ARG OPENWRT_TAG=x86-64-24.10.2
+ARG VERSION=0.9.1
 
-on:
-  push:
-    branches: [ "master" ]
-  pull_request:
-    branches: [ "master" ]
+# ------------------------------
+# Stage 1: Builder
+# ------------------------------
+FROM --platform=linux/${ARCH} openwrt/rootfs:${OPENWRT_TAG} AS builder
 
-jobs:
-  build-and-export:
-    runs-on: ubuntu-latest
+ARG ARCH
+ARG VERSION
 
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+# 定义全局 SYSROOT 环境变量
+ENV SYSROOT=/sysroot
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+RUN set -eux \
+    && mkdir -p /var/lock /var/run \
+    && opkg update \
+    && opkg install curl \
+    \
+    # 准备 SYSROOT 目录
+    && mkdir -p \
+        "$SYSROOT/bin" \
+        "$SYSROOT/dev" \
+        "$SYSROOT/etc" \
+        "$SYSROOT/lib" \
+        "$SYSROOT/mnt" \
+        "$SYSROOT/proc" \
+        "$SYSROOT/root" \
+        "$SYSROOT/sbin" \
+        "$SYSROOT/sys" \
+        "$SYSROOT/tmp/lib" \
+        "$SYSROOT/tmp/lock" \
+        "$SYSROOT/tmp/log" \
+        "$SYSROOT/tmp/run" \
+        "$SYSROOT/tmp/tmp" \
+        "$SYSROOT/usr" \
+    && ln -s tmp "$SYSROOT/var" \
+    && ln -s /var/run "$SYSROOT/run" \
+    && { if [ -e /lib64 ]; then ln -s lib "$SYSROOT/lib64"; fi; } \
+    && cp -a \
+        /etc/fstab \
+        /etc/group \
+        /etc/hosts \
+        /etc/mtab \
+        /etc/opkg \
+        /etc/passwd \
+        /etc/shadow \
+        /etc/shells \
+        "$SYSROOT/etc" \
+    \
+    # 获取 libc 和 kernel IPK
+    && core_url=$(grep " openwrt_core " /etc/opkg/distfeeds.conf | cut -d" " -f3) \
+    && libc_info=$(opkg info libc) \
+    && kern_info=$(opkg info kernel) \
+    && libc_ver=$(echo "$libc_info" | grep "^Version: " | cut -d" " -f2) \
+    && kern_ver=$(echo "$kern_info" | grep "^Version: " | cut -d" " -f2) \
+    && libc_arch=$(echo "$libc_info" | grep "^Architecture: " | cut -d" " -f2) \
+    && kern_arch=$(echo "$kern_info" | grep "^Architecture: " | cut -d" " -f2) \
+    && libc_pkg="$core_url/libc""_$libc_ver""_$libc_arch"".ipk" \
+    && kern_pkg="$core_url/kernel""_$kern_ver""_$kern_arch"".ipk" \
+    \
+    # 安装基础包到 SYSROOT
+    && opkg --offline-root "$SYSROOT" update \
+    && opkg --offline-root "$SYSROOT" install \
+        "$libc_pkg" \
+        "$kern_pkg" \
+        busybox \
+        ip6tables-zz-legacy \
+        iptables-zz-legacy \
+        iptables-mod-conntrack-extra \
+        iptables-mod-nfqueue \
+        nftables-nojson \
+    \
+    # 下载 fakesip 并放到 SYSROOT
+    && cd /root \
+    && curl -Lfo "fakesip-linux-${ARCH}.tar.gz" \
+        "https://github.com/MikeWang000000/FakeSIP/releases/download/${VERSION}/fakesip-linux-${ARCH}.tar.gz" \
+    && tar xzf "fakesip-linux-${ARCH}.tar.gz" \
+    && cp "fakesip-linux-${ARCH}/fakesip" "$SYSROOT/usr/sbin/fakesip" \
+    \
+    # 清理多余文件
+    && rm -rf \
+        "$SYSROOT/etc/modules.d" \
+        "$SYSROOT/etc/modules-boot.d" \
+        "$SYSROOT/etc/opkg" \
+        "$SYSROOT/etc/sysctl.d" \
+        "$SYSROOT/lib/modules" \
+        "$SYSROOT/usr/lib/opkg"
 
-      - name: Build Docker image for x86_64
-        run: |
-          IMAGE_NAME=fakesip
-          TAG=$(date +%s)
-          echo "Building Docker image: $IMAGE_NAME:x86_64-$TAG"
-          docker buildx build \
-            --platform linux/amd64 \
-            --load \
-            --file Dockerfile \
-            --build-arg ARCH=x86_64 \
-            --build-arg VERSION=0.9.1 \
-            --tag $IMAGE_NAME:x86_64-$TAG \
-            .
+# ------------------------------
+# Stage 2: Final image
+# ------------------------------
+FROM scratch
 
-          docker save -o fakesip-x86_64.tar $IMAGE_NAME:x86_64-$TAG
+COPY --from=builder /sysroot /
 
-      - name: Build Docker image for arm64
-        run: |
-          IMAGE_NAME=fakesip
-          TAG=$(date +%s)
-          echo "Building Docker image: $IMAGE_NAME:arm64-$TAG"
-          docker buildx build \
-            --platform linux/arm64 \
-            --load \
-            --file Dockerfile \
-            --build-arg ARCH=arm64 \
-            --build-arg VERSION=0.9.1 \
-            --tag $IMAGE_NAME:arm64-$TAG \
-            .
+ENV HOME=/root
+ENV PATH=/usr/sbin:/usr/bin:/sbin:/bin
+ENV LANG=C.UTF-8
+ENV LANGUAGE=C.UTF-8
+ENV LC_ALL=C.UTF-8
 
-          docker save -o fakesip-arm64.tar $IMAGE_NAME:arm64-$TAG
-
-      - name: Upload x86_64 Docker image tar to GitHub
-        uses: actions/upload-artifact@v4
-        with:
-          name: fakesip-x86_64
-          path: fakesip-x86_64.tar
-
-      - name: Upload arm64 Docker image tar to GitHub
-        uses: actions/upload-artifact@v4
-        with:
-          name: fakesip-arm64
-          path: fakesip-arm64.tar
+ENTRYPOINT ["/usr/sbin/fakesip"]
