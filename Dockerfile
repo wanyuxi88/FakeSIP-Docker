@@ -50,13 +50,13 @@ jobs:
           docker save -o fakesip-arm64.tar $IMAGE_NAME:arm64-$TAG
 
       - name: Upload x86_64 Docker image tar to GitHub
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: fakesip-x86_64
           path: fakesip-x86_64.tar
 
       - name: Upload arm64 Docker image tar to GitHub
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: fakesip-arm64
           path: fakesip-arm64.tar
