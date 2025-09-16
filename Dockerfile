@@ -1,28 +1,27 @@
-# ==============================
-# Stage 1: Builder
-# ==============================
+# ------------------------------
+# Build arguments
+# ------------------------------
 ARG ARCH=x86_64
 ARG OPENWRT_TAG=x86-64-24.10.2
 ARG VERSION=0.9.1
 
+# ------------------------------
+# Stage 1: Builder
+# ------------------------------
 FROM --platform=linux/${ARCH} openwrt/rootfs:${OPENWRT_TAG} AS builder
 
 ARG ARCH
 ARG VERSION
 
-# ------------------------------
-# 1️⃣ 安装基本工具
-# ------------------------------
+# 定义全局 SYSROOT 环境变量
+ENV SYSROOT=/sysroot
+
 RUN set -eux \
     && mkdir -p /var/lock /var/run \
     && opkg update \
-    && opkg install curl
-
-# ------------------------------
-# 2️⃣ 构建 sysroot 目录结构
-# ------------------------------
-RUN set -eux \
-    && SYSROOT="/sysroot" \
+    && opkg install curl \
+    \
+    # 准备 SYSROOT 目录
     && mkdir -p \
         "$SYSROOT/bin" \
         "$SYSROOT/dev" \
@@ -51,12 +50,9 @@ RUN set -eux \
         /etc/passwd \
         /etc/shadow \
         /etc/shells \
-        "$SYSROOT/etc"
-
-# ------------------------------
-# 3️⃣ 安装核心包到 sysroot
-# ------------------------------
-RUN set -eux \
+        "$SYSROOT/etc" \
+    \
+    # 获取 libc 和 kernel IPK
     && core_url=$(grep " openwrt_core " /etc/opkg/distfeeds.conf | cut -d" " -f3) \
     && echo "core_url=$core_url" \
     && libc_info=$(opkg info libc) \
@@ -67,6 +63,8 @@ RUN set -eux \
     && kern_arch=$(echo "$kern_info" | grep "^Architecture: " | cut -d" " -f2) \
     && libc_pkg="$core_url/libc""_$libc_ver""_$libc_arch"".ipk" \
     && kern_pkg="$core_url/kernel""_$kern_ver""_$kern_arch"".ipk" \
+    \
+    # 安装基础包到 SYSROOT
     && opkg --offline-root "$SYSROOT" update \
     && opkg --offline-root "$SYSROOT" install \
         "$libc_pkg" \
@@ -76,17 +74,16 @@ RUN set -eux \
         iptables-zz-legacy \
         iptables-mod-conntrack-extra \
         iptables-mod-nfqueue \
-        nftables-nojson
-
-# ------------------------------
-# 4️⃣ 下载并安装 fakesip
-# ------------------------------
-RUN set -eux \
+        nftables-nojson \
+    \
+    # 下载 fakesip 并放到 SYSROOT
     && cd /root \
-    && curl -Lfo "fakesip-linux-x86_64.tar.gz" \
-       "https://github.com/MikeWang000000/FakeSIP/releases/download/${VERSION}/fakesip-linux-x86_64.tar.gz" \
-    && tar xzf "fakesip-linux-x86_64.tar.gz" \
-    && cp "fakesip-linux-x86_64/fakesip" "$SYSROOT/usr/sbin/fakesip" \
+    && curl -Lfo "fakesip-linux-${ARCH}.tar.gz" \
+        "https://github.com/MikeWang000000/FakeSIP/releases/download/${VERSION}/fakesip-linux-${ARCH}.tar.gz" \
+    && tar xzf "fakesip-linux-${ARCH}.tar.gz" \
+    && cp "fakesip-linux-${ARCH}/fakesip" "$SYSROOT/usr/sbin/fakesip" \
+    \
+    # 清理多余文件
     && rm -rf \
         "$SYSROOT/etc/modules.d" \
         "$SYSROOT/etc/modules-boot.d" \
@@ -95,9 +92,9 @@ RUN set -eux \
         "$SYSROOT/lib/modules" \
         "$SYSROOT/usr/lib/opkg"
 
-# ==============================
-# Stage 2: Scratch
-# ==============================
+# ------------------------------
+# Stage 2: Final image
+# ------------------------------
 FROM scratch
 
 COPY --from=builder /sysroot /
