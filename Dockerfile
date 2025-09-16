@@ -61,10 +61,10 @@ RUN set -eux \
         iptables-mod-nfqueue \
         nftables-nojson \
     && cd /root \
-    && curl -Lfo "fakehttp-linux-${ARCH}.tar.gz" \
-        "https://github.com/MikeWang000000/FakeHTTP/releases/download/${VERSION}/fakehttp-linux-${ARCH}.tar.gz" \
-    && tar xzf "fakehttp-linux-${ARCH}.tar.gz" \
-    && cp "fakehttp-linux-${ARCH}/fakehttp" "$SYSROOT/usr/sbin/fakehttp" \
+    && curl -Lfo "fakesip-linux-${ARCH}.tar.gz" \
+        "https://github.com/MikeWang000000/fakesip/releases/download/${VERSION}/fakesip-linux-${ARCH}.tar.gz" \
+    && tar xzf "fakesip-linux-${ARCH}.tar.gz" \
+    && cp "fakesip-linux-${ARCH}/fakesip" "$SYSROOT/usr/sbin/fakesip" \
     && rm -rf \
         "$SYSROOT/etc/modules.d" \
         "$SYSROOT/etc/modules-boot.d" \
@@ -83,4 +83,4 @@ ENV LANG=C.UTF-8
 ENV LANGUAGE=C.UTF-8
 ENV LC_ALL=C.UTF-8
 
-ENTRYPOINT ["/usr/sbin/fakehttp"]
+ENTRYPOINT ["/usr/sbin/fakesip"]
