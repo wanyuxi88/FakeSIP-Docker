@@ -32,14 +32,16 @@ jobs:
             --tag $IMAGE_NAME:latest \
             .
 
+          # 将 TAG 导出为环境变量供后续步骤使用
+          echo "IMAGE_TAG=$TAG" >> $GITHUB_ENV
+
       - name: Save Docker image to tar
         run: |
           IMAGE_NAME=fakesip
-          TAG=$(date +%s)
           docker save -o fakesip-image.tar $IMAGE_NAME:latest
 
       - name: Upload Docker image tar to GitHub
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docker-image
           path: fakesip-image.tar
