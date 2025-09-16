@@ -62,7 +62,7 @@ RUN set -eux \
         nftables-nojson \
     && cd /root \
     && curl -Lfo "fakesip-linux-${ARCH}.tar.gz" \
-        "https://github.com/MikeWang000000/fakesip/releases/download/${VERSION}/fakesip-linux-${ARCH}.tar.gz" \
+        "https://github.com/MikeWang000000/FakeSIP/releases/download/${VERSION}/fakesip-linux-${ARCH}.tar.gz" \
     && tar xzf "fakesip-linux-${ARCH}.tar.gz" \
     && cp "fakesip-linux-${ARCH}/fakesip" "$SYSROOT/usr/sbin/fakesip" \
     && rm -rf \
